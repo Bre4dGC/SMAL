@@ -27,8 +27,8 @@ z = x - y   # Linear arithmetic expression (z becomes 67)
 
 No functions allowed. Stream symbols define data flow direction.
 
-> : Input (Read from console into variable)
-< : Output (Print variable value to console)
+`>` Input (Read from console into variable)
+`<` Output (Print variable value to console)
 
 ```smal
 a
