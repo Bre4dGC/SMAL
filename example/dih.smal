@@ -1,0 +1,23 @@
+# Variable declaration
+n i s
+
+# Get user input
+> n
+
+# Initialization
+i = 1
+s = i + 12
+
+< i
+< s
+< n
+
+# SOON
+
+# Loop block
+#i < n @
+#    s + i
+#    i + 1
+
+# Output result
+#< s
