@@ -5,19 +5,13 @@ n i s
 > n
 
 # Initialization
-i = 1
-s = i + 12
-
-< i
-< s
-< n
-
-# SOON
+s = 5
 
 # Loop block
-#i < n @
-#    s + i
-#    i + 1
+i < n ?
+    i + 1
+    s + i
+    < i
 
 # Output result
-#< s
+< s

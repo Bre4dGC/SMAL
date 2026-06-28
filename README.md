@@ -46,7 +46,7 @@ x = 10
 y = 20
 
 x < y ?
-    > x     # Print only if x < y
+    < x     # Print only if x < y
 ```
 
 ### Loops (@)
@@ -56,7 +56,7 @@ Repeats the indented block as long as the expression before @ remains true.
 ```smal
 i = 0
 i < 5 @
-    > i
+    < i
     i + 1
 ```
 
