@@ -12,8 +12,8 @@ int main(int argc, char** argv)
     if(strcmp(argv[1], "version") == 0){
         printf("SMAL is a simple programming language designed for educational purposes.\n");
         printf("Current version: %s\n", VERSION);
-        printf("Latest update: 2026-06-29\n");
-        printf("Update message: Implement full functionality.\n");
+        printf("Latest update: 2026-06-30\n");
+        printf("Update message: [fix] stmt: issue with loop parsing.\n");
     }
     else if(strcmp(argv[1], "help") == 0){
         printf("List of available commands:\n");

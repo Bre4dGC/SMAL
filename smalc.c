@@ -5,18 +5,18 @@
 
 #include "smalc.h"
 
-token_t* tokens;
+token_t tokens[256];
 int iter;
 
 decl_t decl;
 stmt_t stmt;
+int stmt_depth;
 
 token_t current;
 token_t next;
 
 void tokenize(char* code)
 {
-    tokens = calloc(256, sizeof(token_t));
     int count = 0;
     bool line_start = true;
 
@@ -71,8 +71,8 @@ void tokenize(char* code)
                     while(isdigit(code[i])) str[c++] = code[i++];
                     str[c] = '\0';
 
-                    int num = 0;
-                    for(int j = 0; j < strlen(str); j++) num = num * 10 + (str[j] - '0');
+                    size_t num = 0;
+                    for(size_t j = 0; j < strlen(str); j++) num = num * 10 + (str[j] - '0');
                     tokens[count].number = num;
                     i--;
                     break;
@@ -99,7 +99,7 @@ int is_decl(char ident)
     return -1;
 }
 
-static int get_token_value(token_t* t)
+static size_t get_token_value(token_t* t)
 {
     if(t->kind == T_NUM) return t->number;
     if(t->kind == T_VAR){
@@ -110,10 +110,10 @@ static int get_token_value(token_t* t)
     return 0;
 }
 
-int parse_expr()
+size_t parse_expr()
 {
-    int value = 0;
-    int left = get_token_value(&current);
+    size_t value = 0;
+    size_t left = get_token_value(&current);
 
     if(next.kind == T_EOL || next.kind == T_EOF){
         advance();
@@ -121,7 +121,7 @@ int parse_expr()
     }
 
     token_t *right_tok = &tokens[iter + 2];
-    int right = get_token_value(right_tok);
+    size_t right = get_token_value(right_tok);
 
     switch(next.kind){
         case T_MUL: value = left * right; break;
@@ -154,6 +154,7 @@ void parse_stmt(void)
             if(tokens[body_end].kind == T_EOL && tokens[body_end + 1].kind != T_TAB) break;
             body_end++;
         }
+        if(tokens[body_end].kind == T_EOF && body_end > body_start) body_end--;
     }
 
     int after_block = body_end + 1;
@@ -166,18 +167,21 @@ void parse_stmt(void)
     }
     stmt.loop_back = stmt_start;
     stmt.jump_to = after_block;
-    iter = stmt_line_end;
+    
+    if(body_start != -1) iter = body_start - 1;
+    else iter = stmt_line_end;
 }
 
 void parse(void)
 {
     ref_t* ref = NULL;
 
-    for(iter = 0; tokens[iter].kind != T_EOF; iter++){
-        if(stmt.jump_to != -1 && iter == stmt.jump_to){
+    for(iter = 0; ; iter++){
+        if(stmt.jump_to != -1 && stmt.type == STMT_LOOP && iter >= stmt.jump_to){
             iter = stmt.loop_back - 1;
             continue;
         }
+        if(tokens[iter].kind == T_EOF) break;
 
         current = tokens[iter];
         next = tokens[iter+1];
@@ -197,7 +201,7 @@ void parse(void)
                         }
                         break;
                     case T_ASSIGN: {
-                        int idx = is_decl(current.ident);
+                        size_t idx = is_decl(current.ident);
                         ref = &decl.variables[idx];
                         advance();
                         advance();
@@ -248,7 +252,7 @@ void parse(void)
                             int idx = is_decl(current.ident);
                             if(idx != -1){
                                 printf("%c: ", decl.variables[idx].ident);
-                                scanf("%d", &decl.variables[idx].value);
+                                scanf("%zd", &decl.variables[idx].value);
                             }
                         }
                         break;
@@ -256,9 +260,9 @@ void parse(void)
                     case T_LANGLE:
                         if(current.kind == T_VAR){
                             int idx = is_decl(current.ident);
-                            if(idx != -1) printf("%c = %d\n", decl.variables[idx].ident, parse_expr());
+                            if(idx != -1) printf("%c = %zd\n", decl.variables[idx].ident, parse_expr());
                         }
-                        else if(current.kind == T_NUM) printf("%d\n", parse_expr());
+                        else if(current.kind == T_NUM) printf("%zd\n", parse_expr());
                         else if(current.kind == T_EOL || current.kind == T_EOF) continue;
                         else fprintf(stderr, "Unexpected token: %d\n", current.kind);
                         break;
@@ -296,13 +300,12 @@ void execute(char* filename)
     tokenize(buffer);
     parse();
 
-    free(tokens);
     free(buffer);
     fclose(file);
 }
 
 void error(char* msg)
 {
-    fprintf(stderr, "%s", msg);
+    fprintf(stderr, "[ERROR] %s", msg);
     exit(1);
 }

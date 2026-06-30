@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdlib.h>
 #include <stdbool.h>
 
 /*################# LEXER #################*/
@@ -24,14 +25,14 @@ typedef enum {
 typedef struct {
     token_kind_t kind;
     union {
-        char ident; // single character variable identificator
-        int number; // just a number
+        char ident;     // single character variable identificator
+        size_t number;  // just a number
     };
 } token_t;
 
 typedef struct {
     char ident;
-    int  value;
+    size_t value;
 } ref_t;
 
 typedef struct {
@@ -41,7 +42,7 @@ typedef struct {
 
 typedef struct {
     bool cond;
-    int left, right;
+    size_t left, right;
     int jump_to, loop_back;
     enum {STMT_COND = T_COND, STMT_LOOP = T_LOOP} type;
 } stmt_t;
