@@ -3,7 +3,7 @@
 
 #include "smalc.h"
 
-#define VERSION "2.1"
+#define VERSION "1.3.1"
 
 int main(int argc, char** argv)
 {
@@ -19,10 +19,14 @@ int main(int argc, char** argv)
         printf("List of available commands:\n");
         printf("    version\tGet information about the language\n");
         printf("    run <f>\tExecute .smal file\n");
+        printf("    repl   \tStart interactive interpreter\n");
     }
     else if(strcmp(argv[1], "run") == 0){
         if(argc < 3) return fprintf(stderr, "Provide path to the .smal file\n");
         execute(argv[2]);
+    }
+    else if(strcmp(argv[1], "repl") == 0){
+        repl();
     }
     return 0;
 }

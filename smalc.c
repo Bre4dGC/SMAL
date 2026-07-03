@@ -2,14 +2,18 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "smalc.h"
 
-token_t tokens[256];
+#define TOKENS_LIMIT 256
+#define STMT_LIMIT   3
+
+token_t tokens[TOKENS_LIMIT];
 int iter;
 
 decl_t decl;
-stmt_t stmt;
+stmt_t stmt[STMT_LIMIT];
 int stmt_depth;
 
 token_t current;
@@ -35,18 +39,22 @@ void tokenize(char* code)
                     spaces++;
                     i++;
                 }
-                if(spaces >= 4){
+                int groups = spaces / 4;
+                for(int g = 0; g < groups; g++){
                     tokens[count].kind = T_TAB;
                     count++;
                     if(count >= 255) break;
                 }
+                if(count >= 255) break;
                 i--;
                 continue;
             }
         }
 
         switch(code[i]){
-            case '*': case '/': case '+': case '-': case '=': case '<': case '>': case '?': case '@':
+            case '*': case '/': case '+': case '-':
+            case '=': case '~': case '?': case '@':
+            case '<': case '>': case ':': case '!':
                 tokens[count].kind = code[i]; line_start = false;
                 break;
             case '\n': tokens[count].kind = T_EOL; line_start = true; break;
@@ -112,7 +120,6 @@ static size_t get_token_value(token_t* t)
 
 size_t parse_expr()
 {
-    size_t value = 0;
     size_t left = get_token_value(&current);
 
     if(next.kind == T_EOL || next.kind == T_EOF){
@@ -124,34 +131,47 @@ size_t parse_expr()
     size_t right = get_token_value(right_tok);
 
     switch(next.kind){
-        case T_MUL: value = left * right; break;
-        case T_DIV: value = left / right; break;
-        case T_ADD: value = left + right; break;
-        case T_SUB: value = left - right; break;
-        default: value = left; break;
+        case T_MUL: left *= right; break;
+        case T_DIV: left /= right; break;
+        case T_ADD: left += right; break;
+        case T_SUB: left -= right; break;
+        case T_RAND:
+            left += rand() % (right + 1);
+            break;
+        default: break;
     }
     advance();
     advance();
-    return value;
+    return left;
 }
 
 void parse_stmt(void)
 {
+    stmt_t* cs = &stmt[stmt_depth];
     int stmt_start = iter - 2;
     int stmt_line_end = iter + 2;
 
     while(tokens[stmt_line_end].kind != T_EOL && tokens[stmt_line_end].kind != T_EOF) stmt_line_end++;
 
     int body_start = -1;
+    int body_tabs = 0;
     if(tokens[stmt_line_end].kind == T_EOL && tokens[stmt_line_end + 1].kind == T_TAB){
-        body_start = stmt_line_end + 2;
+        body_start = stmt_line_end + 1;
+        while(tokens[body_start].kind == T_TAB){
+            body_tabs++;
+            body_start++;
+        }
     }
 
     int body_end = stmt_line_end;
     if(body_start != -1){
         body_end = body_start;
         while(tokens[body_end].kind != T_EOF){
-            if(tokens[body_end].kind == T_EOL && tokens[body_end + 1].kind != T_TAB) break;
+            if(tokens[body_end].kind == T_EOL){
+                int tabs = 0;
+                while(tokens[body_end + 1 + tabs].kind == T_TAB) tabs++;
+                if(tabs < body_tabs) break;
+            }
             body_end++;
         }
         if(tokens[body_end].kind == T_EOF && body_end > body_start) body_end--;
@@ -159,14 +179,14 @@ void parse_stmt(void)
 
     int after_block = body_end + 1;
 
-    if(!stmt.cond){
-        stmt.loop_back = -1;
-        stmt.jump_to = -1;
+    if(!cs->cond){
+        cs->loop_back = -1;
+        cs->jump_to = -1;
         iter = after_block - 1;
         return;
     }
-    stmt.loop_back = stmt_start;
-    stmt.jump_to = after_block;
+    cs->loop_back = stmt_start;
+    cs->jump_to = after_block;
     
     if(body_start != -1) iter = body_start - 1;
     else iter = stmt_line_end;
@@ -177,10 +197,20 @@ void parse(void)
     ref_t* ref = NULL;
 
     for(iter = 0; ; iter++){
-        if(stmt.jump_to != -1 && stmt.type == STMT_LOOP && iter >= stmt.jump_to){
-            iter = stmt.loop_back - 1;
-            continue;
+        for (int d = stmt_depth - 1; d >= 0; d--) {
+            if (stmt[d].jump_to != -1 && stmt[d].type == STMT_COND && iter >= stmt[d].jump_to) {
+                stmt[d].jump_to = -1;
+                stmt_depth = d;
+            }
         }
+        for (int d = stmt_depth - 1; d >= 0; d--) {
+            if (stmt[d].jump_to != -1 && stmt[d].type == STMT_LOOP && iter >= stmt[d].jump_to) {
+                iter = stmt[d].loop_back - 1;
+                stmt_depth = d;
+                continue;
+            }
+        }
+        if(iter < 0) continue;
         if(tokens[iter].kind == T_EOF) break;
 
         current = tokens[iter];
@@ -207,30 +237,32 @@ void parse(void)
                         advance();
                         ref->value = parse_expr();
                     } break;
-                    case T_MUL: case T_DIV: case T_ADD: case T_SUB: {
+                    case T_MUL: case T_DIV: case T_ADD: case T_SUB: case T_RAND: {
                         int idx = is_decl(current.ident);
                         if(idx == -1) return;
                         decl.variables[idx].value = parse_expr();
                         advance();
                     } break;
-                    case T_LANGLE: case T_RANGLE: {
-                        int stmt_start = iter;
-                        stmt.left = get_token_value(&current);
+                    case T_LANGLE: case T_RANGLE: case T_EQUAL: case T_NEQUAL: {
+                        stmt_t* cs = &stmt[stmt_depth];
+                        cs->left = get_token_value(&current);
                         token_kind_t rel = next.kind;
                         token_t *right_tok = &tokens[iter + 2];
                         token_kind_t stmt_token = tokens[iter + 3].kind;
-                        stmt.right = get_token_value(right_tok);
+                        cs->right = get_token_value(right_tok);
 
                         if(stmt_token == T_COND || stmt_token == T_LOOP){
-                            stmt.type = (stmt_token == T_COND ? STMT_COND : STMT_LOOP);
-                            iter += 2;
-                            current = tokens[iter];
-                            next = tokens[iter+1];
+                            cs->type = stmt_token;
+                            iter++;
+                            advance();
 
-                            stmt.cond = (rel == T_LANGLE && stmt.left < stmt.right) || (rel == T_RANGLE && stmt.left > stmt.right);
-                            if(stmt.cond){
+                            cs->cond = (rel == T_LANGLE && cs->left < cs->right)
+                                    || (rel == T_RANGLE && cs->left > cs->right)
+                                    || (rel == T_EQUAL  && cs->left == cs->right)
+                                    || (rel == T_NEQUAL && cs->left != cs->right);
+                            if(cs->cond){
                                 parse_stmt();
-                                if(stmt.jump_to != -1 && iter == stmt.jump_to) iter = stmt.loop_back - 1;
+                                stmt_depth++;
                                 break;
                             }
                             parse_stmt();
@@ -294,14 +326,69 @@ void execute(char* filename)
 
     decl.count = 0;
     iter = 0;
-    stmt.jump_to = -1;
-    stmt.loop_back = -1;
+    stmt_depth = 0;
+    for (int i = 0; i < STMT_LIMIT; i++) {
+        stmt[i].jump_to = -1;
+        stmt[i].loop_back = -1;
+    }
 
+    srand(time(NULL));
     tokenize(buffer);
     parse();
 
     free(buffer);
     fclose(file);
+}
+
+void repl(void)
+{
+    srand(time(NULL));
+    char source[1028 * 10];
+    char line[1028];
+    while(true){
+        printf("smal> ");
+        if(!fgets(line, sizeof(line), stdin)) break;
+        if(strcmp(line, "Q\n") == 0) break;
+        else if(strcmp(line, "C\n") == 0){
+            decl.count = 0;
+            iter = 0;
+            stmt_depth = 0;
+            for(int i = 0; i < STMT_LIMIT; i++){
+                stmt[i].jump_to = -1;
+                stmt[i].loop_back = -1;
+            }
+            continue;
+        }
+
+        source[0] = '\0';
+        strcat(source, line);
+
+        size_t len = strlen(source);
+        size_t end = len;
+        while(end > 0 && (source[end-1] == '\n')) end--;
+        bool has_stmt = end > 0 && (source[end-1] == '?' || source[end-1] == '@');
+
+        if(has_stmt){
+            while(true){
+                printf("smal> ... ");
+                if(!fgets(line, sizeof(line), stdin)) break;
+                if(strcmp(line, "\n") == 0) break;
+                if(strlen(source) + strlen(line) < sizeof(source)){
+                    source[strlen(source)] = '\t';
+                    strcat(source, line);
+                }
+            }
+        }
+
+        stmt_depth = 0;
+        for(int i = 0; i < STMT_LIMIT; i++){
+            stmt[i].jump_to = -1;
+            stmt[i].loop_back = -1;
+        }
+
+        tokenize(source);
+        parse();
+    }
 }
 
 void error(char* msg)

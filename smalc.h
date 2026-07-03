@@ -18,6 +18,9 @@ typedef enum {
     T_ASSIGN = '=',
     T_LANGLE = '<',
     T_RANGLE = '>',
+    T_EQUAL  = ':',
+    T_NEQUAL = '!',
+    T_RAND   = '~',
     T_COND   = '?',
     T_LOOP   = '@',
 } token_kind_t;
@@ -51,3 +54,4 @@ void error(char* msg);
 void tokenize(char* code);
 void parse(void);
 void execute(char* src);
+void repl(void);
