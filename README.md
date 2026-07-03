@@ -1,57 +1,80 @@
-# Smal - Syntax Minimalist Algorithmic Language
+# smalc — SMAL language interpreter
 
-A ultra-minimalist, bracketless, and keyword-free programming language designed for simplicity and easy parsing.
+SMAL (Syntax Minimalist Algorithmic Language) is a bracketless, keyword-free programming language. `smalc` runs SMAL programs.
 
-## 1. General
+## Build
 
-- Variables: Single-character names only (`a-z`). Initialized to 0 upon declaration.
-
-- Declarations: Variables must be declared before use by listing them separated by spaces.
-
-- Comments: Everything after the `#` symbol is ignored.
-
-- Whitespace: Indentation (4 spaces or 1 tab) is used to define blocks for loops and conditionals.
-
-## 2. Syntax & Operations
-
-### Variables & Assignment
-
-```smal
-x y z       # Declare variables x, y, and z (all set to 0)
-x = 100     # Assign 100 to x
-y = 33      # Assign 33 to y
-z = x - y   # Linear arithmetic expression (z becomes 67)
+```sh
+cc -o smalc main.c smalc.c
 ```
 
-### Input / Output (I/O)
+## Usage
 
-No functions allowed. Stream symbols define data flow direction.
-
-`>` Input (Read from console into variable)
-
-`<` Output (Print variable value to console)
-
-```smal
-a
-> a         # Read user input into 'a'
-< a         # Print the value of 'a'
+```
+smalc run <file>    # execute a .smal file
+smalc repl          # start interactive session
+smalc help          # show commands
+smalc version       # show version info
 ```
 
-### Conditionals (?)
+In the REPL, type `Q` to quit, `C` to clear all variables.
 
-Evaluates the expression. If true, executes the indented block below it.
+## Language
+
+### Variables
+
+26 variables (`a`–`z`). Declare them on one line. Each starts at 0.
 
 ```smal
-x = 10
-y = 20
-
-x < y ?
-    < x     # Print only if x < y
+x y z
+xyz     # valid
 ```
 
-### Loops (@)
+Assignment uses `=`:
 
-Repeats the indented block as long as the expression before @ remains true.
+```smal
+x = 100
+y = x + 50
+```
+
+### Arithmetic
+
+| Op | Meaning    |
+|----|------------|
+| `+`| Addition   |
+| `-`| Subtraction|
+| `*`| Multiply   |
+| `/`| Divide     |
+| `~`| Random     |
+
+`~` returns a random integer between the left operand and the left + right operand.
+
+```smal
+# random number from 1 to 100
+r = 1 ~ 100
+```
+
+### I/O
+
+`>` reads input into a variable. `<` prints a variable or number.
+
+```smal
+> x
+< x        # x = 42
+```
+
+### Conditionals (`?`)
+
+A comparison followed by `?` executes the indented block below it if the comparison is true.
+
+```smal
+x > 10 ?
+    < x
+```
+
+### Loops (`@`)
+
+A comparison followed by `@` repeats the indented block while the comparison holds.
 
 ```smal
 i = 0
@@ -60,25 +83,49 @@ i < 5 @
     i + 1
 ```
 
-## 3. Complete Example
-A program that reads a number n and prints the sum of all numbers from 1 to n:
+Comparisons: `:` (equal), `!` (not equal), `<` (less than), `>` (greater than).
+
+### Nesting
+
+Conditionals and loops support up to 3 levels of nesting. Blocks use 4 spaces or 1 tab.
+
+### Comments
+
+Everything after `#` to end of line is ignored.
+
+## Examples
+
+### Fibonacci — print first `n` Fibonacci numbers
 
 ```smal
-# Variable declaration
-n i s
-
-# Get user input
-> n
-
-# Initialization
-i = 1
-s = 0
-
-# Loop block
-i < n @
-    s + i
-    i + 1
-
-# Output result
-< s
+ifgt
+f = 0
+g = 1
+> i
+i > 0 @
+    < f
+    t = g
+    g + f
+    f = t
+    i - 1
 ```
+
+### Euclid's GCD
+
+```smal
+ab
+a = 1 ~ 100
+b = 1 ~ 100
+b > 0 @
+    a > b ?
+        a - b
+    a < b ?
+        b - a
+    a : b ?
+        b - a
+< a
+```
+
+## License
+
+MIT
