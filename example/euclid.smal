@@ -1,0 +1,15 @@
+ab  # declaration
+
+# get random random from 1 to 100
+a = 1 ~ 100
+b = 1 ~ 100
+
+b > 0 @         # while b greater than 0
+    a > b ?     # if a greater than b
+        a - b   # subtract b from a
+    a < b ?     # if a less than b
+        b - a   # subtract a from b
+    a : b ?     # if a and b are equal
+        b - a   # subtract a from b
+
+< a     # print GCD
