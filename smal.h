@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#define VARIABLES_LIMIT 26
+#define ARRAY_LIMIT 128
+
 /*################# LEXER #################*/
 
 typedef enum {
@@ -21,6 +24,7 @@ typedef enum {
     T_EQUAL  = ':',
     T_NEQUAL = '!',
     T_RAND   = '~',
+    T_INDEX  = '"',
     T_COND   = '?',
     T_LOOP   = '@',
 } token_kind_t;
@@ -35,11 +39,13 @@ typedef struct {
 
 typedef struct {
     char ident;
-    size_t value;
+    size_t value[ARRAY_LIMIT];
+    size_t count;
+    int scope;
 } ref_t;
 
 typedef struct {
-    ref_t variables[26];
+    ref_t variables[VARIABLES_LIMIT];
     int count;
 } decl_t;
 

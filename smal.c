@@ -4,7 +4,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "smalc.h"
+#include "smal.h"
 
 #define TOKENS_LIMIT 256
 #define STMT_LIMIT   3
@@ -55,6 +55,7 @@ void tokenize(char* code)
             case '*': case '/': case '+': case '-':
             case '=': case '~': case '?': case '@':
             case '<': case '>': case ':': case '!':
+            case '"':
                 tokens[count].kind = code[i]; line_start = false;
                 break;
             case '\n': tokens[count].kind = T_EOL; line_start = true; break;
@@ -94,41 +95,69 @@ void tokenize(char* code)
     tokens[count].kind = T_EOF;
 }
 
-void advance()
+static void advance()
 {
     iter++;
     current = tokens[iter];
     next = tokens[iter+1];
 }
 
-int is_decl(char ident)
+static int is_declared(char ident)
 {
     for(int i = 0; i < decl.count; i++) if(decl.variables[i].ident == ident) return i;
     return -1;
 }
 
-static size_t get_token_value(token_t* t)
+static bool declare()
 {
-    if(t->kind == T_NUM) return t->number;
-    if(t->kind == T_VAR){
-        int idx = is_decl(t->ident);
-        if(idx != -1) return decl.variables[idx].value;
+    if(decl.count < VARIABLES_LIMIT){
+        decl.variables[decl.count] = (ref_t){current.ident, 0};
+        decl.count++;
+        return true;
+    }
+    return false;
+}
+
+static size_t get_token_value(token_t t)
+{
+    if(t.kind == T_NUM) return t.number;
+    if(t.kind == T_VAR){
+        int idx = is_declared(t.ident);
+        if(idx != -1) return decl.variables[idx].value[0];
         return 0;
     }
     return 0;
 }
 
+static size_t* get_array_index()
+{
+    int var_idx = is_declared(current.ident);
+    if(var_idx == -1) return NULL;
+
+    advance();
+    advance();
+
+    if(current.kind != T_VAR && current.kind != T_NUM) return &decl.variables[var_idx].count;
+    size_t val_idx = get_token_value(current);
+    if(val_idx >= ARRAY_LIMIT){
+        error("Array index out of bounds");
+        return NULL;
+    }
+    advance();
+
+    return &decl.variables[var_idx].value[val_idx];
+}
+
 size_t parse_expr()
 {
-    size_t left = get_token_value(&current);
+    size_t left = get_token_value(current);
 
     if(next.kind == T_EOL || next.kind == T_EOF){
         advance();
         return left;
     }
 
-    token_t *right_tok = &tokens[iter + 2];
-    size_t right = get_token_value(right_tok);
+    size_t right = get_token_value(tokens[iter+2]);
 
     switch(next.kind){
         case T_MUL: left *= right; break;
@@ -138,6 +167,11 @@ size_t parse_expr()
         case T_RAND:
             left += rand() % (right + 1);
             break;
+        case T_INDEX:{
+            size_t* elem = get_array_index();
+            if(elem) return *elem;
+            return 0;
+        }
         default: break;
     }
     advance();
@@ -168,8 +202,10 @@ void parse_stmt(void)
         body_end = body_start;
         while(tokens[body_end].kind != T_EOF){
             if(tokens[body_end].kind == T_EOL){
+                int look = 1;
+                while(tokens[body_end + look].kind == T_EOL) look++;
                 int tabs = 0;
-                while(tokens[body_end + 1 + tabs].kind == T_TAB) tabs++;
+                while(tokens[body_end + look + tabs].kind == T_TAB) tabs++;
                 if(tabs < body_tabs) break;
             }
             body_end++;
@@ -194,17 +230,13 @@ void parse_stmt(void)
 
 void parse(void)
 {
-    ref_t* ref = NULL;
-
     for(iter = 0; ; iter++){
-        for (int d = stmt_depth - 1; d >= 0; d--) {
-            if (stmt[d].jump_to != -1 && stmt[d].type == STMT_COND && iter >= stmt[d].jump_to) {
+        for(int d = stmt_depth - 1; d >= 0; d--){
+            if(stmt[d].jump_to != -1 && stmt[d].type == STMT_COND && iter >= stmt[d].jump_to){
                 stmt[d].jump_to = -1;
                 stmt_depth = d;
             }
-        }
-        for (int d = stmt_depth - 1; d >= 0; d--) {
-            if (stmt[d].jump_to != -1 && stmt[d].type == STMT_LOOP && iter >= stmt[d].jump_to) {
+            if(stmt[d].jump_to != -1 && stmt[d].type == STMT_LOOP && iter >= stmt[d].jump_to){
                 iter = stmt[d].loop_back - 1;
                 stmt_depth = d;
                 continue;
@@ -221,40 +253,106 @@ void parse(void)
                 switch(next.kind){
                     case T_VAR: case T_EOL: case T_EOF:
                         while(current.kind == T_VAR){
-                            if(is_decl(current.ident) == -1){
-                                if(decl.count < 26){
-                                    decl.variables[decl.count] = (ref_t){current.ident, 0};
-                                    decl.count++;
-                                }
-                            }
+                            if(is_declared(current.ident) == -1) declare();
                             advance();
                         }
                         break;
-                    case T_ASSIGN: {
-                        size_t idx = is_decl(current.ident);
-                        ref = &decl.variables[idx];
-                        advance();
-                        advance();
-                        ref->value = parse_expr();
-                    } break;
-                    case T_MUL: case T_DIV: case T_ADD: case T_SUB: case T_RAND: {
-                        int idx = is_decl(current.ident);
-                        if(idx == -1) return;
-                        decl.variables[idx].value = parse_expr();
-                        advance();
-                    } break;
-                    case T_LANGLE: case T_RANGLE: case T_EQUAL: case T_NEQUAL: {
-                        stmt_t* cs = &stmt[stmt_depth];
-                        cs->left = get_token_value(&current);
-                        token_kind_t rel = next.kind;
-                        token_t *right_tok = &tokens[iter + 2];
-                        token_kind_t stmt_token = tokens[iter + 3].kind;
-                        cs->right = get_token_value(right_tok);
+                    case T_ASSIGN:{
+                        size_t idx = is_declared(current.ident);
+                        if(idx == -1) if(declare()) idx = decl.count - 1;
 
+                        advance();
+                        advance();
+                        if(current.kind == T_NUM && next.kind == T_NUM){
+                            int i;
+                            for(i = 0; current.kind != T_EOL && current.kind != T_EOF; i++){
+                                if(i >= ARRAY_LIMIT) error("Array initializer exceeds limit of 16 elements\n");
+                                decl.variables[idx].value[i] = current.number;
+                                advance();
+                            }
+                            decl.variables[idx].count = i;
+                        }
+                        else {
+                            decl.variables[idx].value[0] = parse_expr();
+                            decl.variables[idx].count = 1;
+                        }
+                    } break;
+                    case T_MUL: case T_DIV: case T_ADD: case T_SUB: case T_RAND:{
+                        int idx = is_declared(current.ident);
+                        if(idx == -1) return;
+                        decl.variables[idx].value[0] = parse_expr();
+                        decl.variables[idx].count = 1;
+                        advance();
+                    } break;
+                    case T_INDEX:{
+                        int cond_start = iter;
+                        size_t* elem = get_array_index();
+                        if(current.kind == T_ASSIGN){
+                            advance();
+                            *elem = parse_expr();
+                        }
+                        else if(current.kind == T_LANGLE || current.kind == T_RANGLE ||
+                                current.kind == T_EQUAL || current.kind == T_NEQUAL){
+                            token_kind_t rel = current.kind;
+                            advance();
+
+                            size_t right_val;
+                            if(current.kind == T_VAR && next.kind == T_INDEX){
+                                size_t* right_elem = get_array_index();
+                                right_val = right_elem ? *right_elem : 0;
+                            } else {
+                                right_val = get_token_value(current);
+                                advance();
+                            }
+
+                            if(current.kind == T_COND || current.kind == T_LOOP){
+                                stmt_t* cs = &stmt[stmt_depth];
+                                cs->type = current.kind;
+                                cs->left = *elem;
+                                cs->right = right_val;
+                                advance();
+                                iter = cond_start + 2;
+
+                                cs->cond = (rel == T_LANGLE && cs->left < cs->right)
+                                        || (rel == T_RANGLE && cs->left > cs->right)
+                                        || (rel == T_EQUAL  && cs->left == cs->right)
+                                        || (rel == T_NEQUAL && cs->left != cs->right);
+                                if(cs->cond){
+                                    parse_stmt();
+                                    stmt_depth++;
+                                    break;
+                                }
+                                parse_stmt();
+                                break;
+                            }
+                            fprintf(stderr, "Expected '?' or '@' after comparison, got token code: %d\n", current.kind);
+                        }
+                        else {
+                            error("Expected '=' after array index expression\n");
+                        }
+                    } break;
+                    case T_LANGLE: case T_RANGLE: case T_EQUAL: case T_NEQUAL:{
+                        stmt_t* cs = &stmt[stmt_depth];
+                        int cond_start = iter;
+                        cs->left = get_token_value(current);
+                        token_kind_t rel = next.kind;
+
+                        advance();
+                        advance();
+
+                        if(current.kind == T_VAR && next.kind == T_INDEX){
+                            size_t* elem = get_array_index();
+                            cs->right = elem ? *elem : 0;
+                        } else {
+                            cs->right = get_token_value(current);
+                            advance();
+                        }
+
+                        token_kind_t stmt_token = current.kind;
                         if(stmt_token == T_COND || stmt_token == T_LOOP){
                             cs->type = stmt_token;
-                            iter++;
                             advance();
+                            iter = cond_start + 2;
 
                             cs->cond = (rel == T_LANGLE && cs->left < cs->right)
                                     || (rel == T_RANGLE && cs->left > cs->right)
@@ -268,42 +366,43 @@ void parse(void)
                             parse_stmt();
                             break;
                         }
-                        fprintf(stderr, "Expected '?' or '@' instead of: %d\n", stmt_token);
+                        fprintf(stderr, "Expected '?' or '@' after comparison, got token code: %d\n", stmt_token);
                     } break;
                     default:
-                        fprintf(stderr, "Unexpected token: %d\n", current.kind);
+                        fprintf(stderr, "Unexpected token (code: %d)\n", current.kind);
                         continue;
                 } break;
-            case T_LANGLE: case T_RANGLE: {
+            case T_LANGLE: case T_RANGLE:{
                 token_kind_t stream = current.kind;
                 advance();
                 switch(stream){
                     // Input
                     case T_RANGLE:
                         if(current.kind == T_VAR){
-                            int idx = is_decl(current.ident);
-                            if(idx != -1){
-                                printf("%c: ", decl.variables[idx].ident);
-                                scanf("%zd", &decl.variables[idx].value);
-                            }
+                            int idx = is_declared(current.ident);
+                            if(idx == -1) if(declare()) idx = decl.count - 1;
+
+                            printf("%c: ", decl.variables[idx].ident);
+                            scanf("%zd", &decl.variables[idx].value[0]);
                         }
                         break;
                     // Output
                     case T_LANGLE:
                         if(current.kind == T_VAR){
-                            int idx = is_decl(current.ident);
-                            if(idx != -1) printf("%c = %zd\n", decl.variables[idx].ident, parse_expr());
+                            int idx = is_declared(current.ident);
+                            if(idx == -1) error("Variable has not been declared\n");
+                            else printf("%c = %zd\n", decl.variables[idx].ident, parse_expr());
                         }
                         else if(current.kind == T_NUM) printf("%zd\n", parse_expr());
                         else if(current.kind == T_EOL || current.kind == T_EOF) continue;
-                        else fprintf(stderr, "Unexpected token: %d\n", current.kind);
+                        else fprintf(stderr, "Unexpected token (code: %d)\n", current.kind);
                         break;
                     default: break;
                 }
             } continue;
             case T_EOL: case T_EOF: case T_TAB: continue;
             default:
-                fprintf(stderr, "Unexpected token: %d\n", current.kind);
+                fprintf(stderr, "Unexpected token (code: %d)\n", current.kind);
                 continue;
         }
     }
@@ -312,22 +411,34 @@ void parse(void)
 void execute(char* filename)
 {
     FILE* file = fopen(filename, "r");
-    if(file == NULL) fprintf(stderr, "Could not open file: %s\n", filename);
+    if(file == NULL){
+        fprintf(stderr, "Could not open file: %s\n", filename);
+        exit(1);
+    }
 
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
     fseek(file, 0, SEEK_SET);
 
     char* buffer = malloc(length + 1);
-    if(buffer == NULL) fprintf(stderr, "Memory allocation failed\n");
+    if(buffer == NULL){
+        fprintf(stderr, "Memory allocation failed\n");
+        fclose(file);
+        exit(1);
+    }
 
-    if(fread(buffer, 1, length, file) != length) fprintf(stderr, "Could not read file: %s\n", filename);
+    if(fread(buffer, 1, length, file) != length){
+        fprintf(stderr, "Could not read file: %s\n", filename);
+        free(buffer);
+        fclose(file);
+        exit(1);
+    }
     buffer[length] = '\0';
 
     decl.count = 0;
     iter = 0;
     stmt_depth = 0;
-    for (int i = 0; i < STMT_LIMIT; i++) {
+    for(int i = 0; i < STMT_LIMIT; i++){
         stmt[i].jump_to = -1;
         stmt[i].loop_back = -1;
     }
