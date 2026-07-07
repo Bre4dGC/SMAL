@@ -1,8 +1,12 @@
 ab  # declaration
 
-# get random random from 1 to 100
+# get random from 1 to 100
 a = 1 ~ 100
 b = 1 ~ 100
+
+# print random numbers
+< a
+< b
 
 b > 0 @         # while b greater than 0
     a > b ?     # if a greater than b
@@ -12,4 +16,5 @@ b > 0 @         # while b greater than 0
     a : b ?     # if a and b are equal
         b - a   # subtract a from b
 
-< a     # print GCD
+r = a
+< r     # print GCD result

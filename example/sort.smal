@@ -1,0 +1,19 @@
+a = 3 2 5 4 1  # initialization of unsorted array with 5 numbers
+
+i j     # declaring loops iterators
+
+i < a" @    # start loop until i less than count of array 'a'
+    l = i   # lowest value from the array
+
+    j = i + 1        # iterator 'j' starts on index after 'i'
+    j < a" @         # nested loop
+        a"j < a"l ?  # comparing index of 'j' and lowest value
+            l = j    # new lowest value
+        j + 1        # increment 'j'
+
+    t = a"i     # temp variable for the index of 'i'
+    a"i = a"l   # assign lowest value to the index of 'i'
+    a"l = t     # assign temp to the index of 'j'
+
+    < a"i   # print current index
+    i + 1   # increment 'i'
