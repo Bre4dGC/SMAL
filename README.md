@@ -1,20 +1,20 @@
-# smalc — SMAL language interpreter
+# SMAL Programming Language
 
-SMAL (Syntax Minimalist Algorithmic Language) is a bracketless, keyword-free programming language. `smalc` runs SMAL programs.
+SMAL (Syntax Minimalist Algorithmic Language) is a bracketless, keyword-free programming language. `smac` runs SMAL programs.
 
 ## Build
 
 ```sh
-cc -o smalc main.c smalc.c
+cc -o smal main.c smal.c
 ```
 
 ## Usage
 
 ```
-smalc run <file>    # execute a .smal file
-smalc repl          # start interactive session
-smalc help          # show commands
-smalc version       # show version info
+smal run <file>    # execute a .smal file
+smal repl          # start interactive session
+smal help          # show commands
+smal version       # show version info
 ```
 
 In the REPL, type `Q` to quit, `C` to clear all variables.
@@ -35,6 +35,19 @@ Assignment uses `=`:
 ```smal
 x = 100
 y = x + 50
+```
+
+### Arrays
+
+Each variable can hold up to 128 values.
+
+```smal
+a = 1 2 3 4 5
+
+a = 5       # without indexing it uses only the first value
+a"4 = 1     # sets the 5th value (0-indexed) to 1
+
+s = a"      # sets size of array 'a' - 5
 ```
 
 ### Arithmetic
@@ -95,36 +108,7 @@ Everything after `#` to end of line is ignored.
 
 ## Examples
 
-### Fibonacci — print first `n` Fibonacci numbers
-
-```smal
-ifgt
-f = 0
-g = 1
-> i
-i > 0 @
-    < f
-    t = g
-    g + f
-    f = t
-    i - 1
-```
-
-### Euclid's GCD
-
-```smal
-ab
-a = 1 ~ 100
-b = 1 ~ 100
-b > 0 @
-    a > b ?
-        a - b
-    a < b ?
-        b - a
-    a : b ?
-        b - a
-< a
-```
+You can see examples of the language in the `example/` directory.
 
 ## License
 
